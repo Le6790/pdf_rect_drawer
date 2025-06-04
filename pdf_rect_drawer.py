@@ -6,9 +6,9 @@ from os import wait
 import fitz  # PyMuPDF
 from PIL import Image, ImageTk
 
-if sys.argv[1]:
+try:
     PDF_PATH = sys.argv[1]
-else:
+except IndexError:
     PDF_PATH = "Formal_Business_Letter_Template30239.pdf"
 
 TARGET_WIDTH = 800  # Resize width for display
@@ -17,7 +17,7 @@ TARGET_WIDTH = 800  # Resize width for display
 def render_pdf_first_page(path, dpi=150):
     doc = fitz.open(path)
     page = doc.load_page(0)
-    pix = page.get_pixmap(dpi=dpi)
+    pix = page.get_pixmap(dpi=dpi, alpha=False)
     image = Image.open(io.BytesIO(pix.tobytes("png")))
     return image
 
@@ -41,6 +41,7 @@ class PDFRectangleDrawer:
         self.start_x = None
         self.start_y = None
         self.rect = None
+        self.text_items = {}  # Store text items for each rectangle
         self.rectangles = []  # List of (canvas_id, coords_scaled)
 
         self.drag_data = {"item": None, "offset_x": 0, "offset_y": 0}
@@ -83,6 +84,14 @@ class PDFRectangleDrawer:
             new_x1 = x - self.drag_data["offset_x"]
             new_y1 = y - self.drag_data["offset_y"]
             self.canvas.coords(item, new_x1, new_y1, new_x1 + width, new_y1 + height)
+            # Update associated text position
+            if item in self.text_items:
+
+                text_id = self.text_items[item]
+                text_center_x = new_x1 + width / 2
+                text_center_y = new_y1 + width / 4
+                self.canvas.coords(text_id, text_center_x, text_center_y)
+
         elif self.mode == "draw" and self.rect:
             self.canvas.coords(self.rect, self.start_x, self.start_y, x, y)
 
@@ -102,6 +111,14 @@ class PDFRectangleDrawer:
             coords = self.canvas.coords(self.rect)
             scaled_coords = tuple(round(c / self.scale) for c in coords)
             print(f"New Rectangle (PDF coords): {scaled_coords}")
+            # Add text at center of rectangle
+            center_x = (coords[0] + coords[2]) / 2
+            center_y = (coords[1] + coords[3]) / 2
+            text_id = self.canvas.create_text(
+                center_x, center_y, text=f"{scaled_coords}", fill="blue"
+            )
+            self.text_items[self.rect] = text_id
+
             self.rectangles.append((self.rect, scaled_coords))
             self.rect = None
 
